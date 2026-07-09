@@ -1,5 +1,3 @@
-```groovy
-// Jenkinsfile
 pipeline {
     agent {
         label 'windows-unity' // Node with Unity installed
@@ -531,4 +529,3 @@ public static class JenkinsBuildScript
         }
     }
 }
-```
