@@ -1,7 +1,7 @@
 // Jenkinsfile
 pipeline {
     agent {
-        label 'windows-unity' // Node with Unity installed — must run as a NORMAL USER
+        label 'windows-unity' 
     }
 
     parameters {
@@ -33,14 +33,14 @@ pipeline {
     }
 
     environment {
-        UNITY_EDITOR       = "${params.UNITY_INSTALL_PATH}\\${params.UNITY_VERSION}\\Editor\\Unity.exe"
-        PROJECT_PATH       = "${WORKSPACE}\\UnityProject"
-        BUILD_OUTPUT_DIR   = "${WORKSPACE}\\Build"
-        BUILD_EXECUTABLE   = "${BUILD_OUTPUT_DIR}\\GameBuild.exe"
-        BUILD_LOG          = "${WORKSPACE}\\Logs\\unity_build.log"
-        RUN_LOG            = "${WORKSPACE}\\Logs\\unity_run.log"
-        PROFILER_DATA_DIR  = "${WORKSPACE}\\ProfilerData"
-        PROFILER_RAW_FILE  = "${WORKSPACE}\\ProfilerData\\profiler_output.raw"
+        UNITY_EDITOR = "${params.UNITY_INSTALL_PATH}\\${params.UNITY_VERSION}\\Editor\\Unity.exe"
+        PROJECT_PATH = "${WORKSPACE}\\UnityProject"
+        BUILD_OUTPUT_DIR = "${WORKSPACE}\\Build"
+        BUILD_EXECUTABLE = "${BUILD_OUTPUT_DIR}\\GameBuild.exe"
+        BUILD_LOG = "${WORKSPACE}\\Logs\\unity_build.log"
+        RUN_LOG = "${WORKSPACE}\\Logs\\unity_run.log"
+        PROFILER_DATA_DIR = "${WORKSPACE}\\ProfilerData"
+        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output.raw"
     }
 
     options {
@@ -52,9 +52,7 @@ pipeline {
 
     stages {
 
-        // =====================================================================
         // STAGE 1: Validate Environment
-        // =====================================================================
         stage('Validate Environment') {
             steps {
                 script {
@@ -62,27 +60,17 @@ pipeline {
                     echo " Validating Unity Installation & Environment"
                     echo "============================================"
 
-                    // --------------------------------------------------------
-                    // Detect whether we're running elevated so later stages
-                    // know to use runas /trustlevel to de-elevate child
-                    // processes.
-                    // --------------------------------------------------------
                     def sessionCheck = bat(
                         script: 'net session >nul 2>&1 && echo ADMIN || echo USER',
                         returnStdout: true
                     ).trim().split('\n').last().trim()
 
                     if (sessionCheck == 'ADMIN') {
-                        echo "WARNING: Jenkins agent is running as Administrator."
-                        echo "Game executable will be launched with runas /trustlevel:0x20000"
-                        echo "to avoid UAC elevation dialogs."
                         env.NEEDS_DEELEVATION = 'true'
                     } else {
-                        echo "Jenkins agent is running as a normal user."
                         env.NEEDS_DEELEVATION = 'false'
                     }
 
-                    // Verify Unity executable exists
                     if (!fileExists(env.UNITY_EDITOR)) {
                         error(
                             "Unity editor not found at: ${env.UNITY_EDITOR}\n" +
@@ -94,9 +82,7 @@ pipeline {
             }
         }
 
-        // =====================================================================
         // STAGE 2: Checkout Source Code
-        // =====================================================================
         stage('Checkout') {
             steps {
                 script {
@@ -105,10 +91,8 @@ pipeline {
                     echo "============================================"
                 }
 
-                // Clean workspace before checkout
                 cleanWs()
-
-                // Clone the repository at the specified branch (latest commit)
+                
                 checkout([
                     $class: 'GitSCM',
                     branches: [[name: "*/${params.BRANCH_NAME}"]],
@@ -127,8 +111,7 @@ pipeline {
                         credentialsId: 'github-credentials'
                     ]]
                 ])
-
-                // Capture the commit hash for traceability
+                
                 script {
                     dir('UnityProject') {
                         env.GIT_COMMIT_HASH = bat(
@@ -153,9 +136,7 @@ pipeline {
             }
         }
 
-        // =====================================================================
         // STAGE 3: Prepare Build Infrastructure
-        // =====================================================================
         stage('Prepare Build') {
             steps {
                 script {
@@ -163,7 +144,6 @@ pipeline {
                     echo " Preparing Build Directories & Scripts"
                     echo "============================================"
 
-                    // Create output directories
                     bat """
                         if not exist "${env.BUILD_OUTPUT_DIR}" mkdir "${env.BUILD_OUTPUT_DIR}"
                         if not exist "${WORKSPACE}\\Logs" mkdir "${WORKSPACE}\\Logs"
@@ -171,7 +151,6 @@ pipeline {
                     """
 
                     // Write the C# build script into the Unity project
-                    // This script is invoked by Unity in batchmode
                     writeFile file: "${env.PROJECT_PATH}\\Assets\\Editor\\JenkinsBuildScript.cs",
                         text: '''
 using UnityEditor;
@@ -296,9 +275,7 @@ public static class JenkinsBuildScript
             }
         }
 
-        // =====================================================================
         // STAGE 4: Build the Unity Project
-        // =====================================================================
         stage('Build Unity Project') {
             steps {
                 script {
@@ -324,7 +301,6 @@ public static class JenkinsBuildScript
                         returnStatus: true
                     )
 
-                    // Always display the build log tail
                     if (fileExists(env.BUILD_LOG)) {
                         echo "====== UNITY BUILD LOG (last 100 lines) ======"
                         bat "powershell -Command \"Get-Content '${env.BUILD_LOG}' -Tail 100\""
@@ -337,7 +313,6 @@ public static class JenkinsBuildScript
                         )
                     }
 
-                    // Verify the executable was produced
                     if (!fileExists(env.BUILD_EXECUTABLE)) {
                         error("Build executable not found at: ${env.BUILD_EXECUTABLE}")
                     }
@@ -347,48 +322,7 @@ public static class JenkinsBuildScript
             }
         }
 
-        // =====================================================================
-        // STAGE 5: Launch Standalone Profiler
-        // =====================================================================
-        // ---------------------------------------------------------------
-        // COMMENTED OUT: Verifying that the built game launches correctly
-        // under Jenkins before introducing the standalone profiler UI.
-        //
-        // The player now writes profiler data directly to a .raw file
-        // via -profiler-log-file, so no profiler window is needed.
-        //
-        // To re-enable later, uncomment this stage and ensure the
-        // profiler starts BEFORE the game executable (Stage 6).
-        // ---------------------------------------------------------------
-        /*
-        stage('Launch Profiler') {
-            steps {
-                script {
-                    echo "============================================"
-                    echo " Launching Unity Standalone Profiler"
-                    echo " Listening on port: 34999"
-                    echo "============================================"
-
-                    bat """
-                        start "UnityProfiler" /B ^
-                            "${env.UNITY_EDITOR}" ^
-                                -profilerconnection "127.0.0.1:34999" ^
-                                -logFile "${WORKSPACE}\\Logs\\profiler.log" ^
-                                -openProfiler
-                    """
-
-                    echo "Waiting for Profiler to initialize..."
-                    sleep(time: 15, unit: 'SECONDS')
-
-                    echo "Profiler should now be listening for connections."
-                }
-            }
-        }
-        */
-
-        // =====================================================================
-        // STAGE 6: Run the Build with Test Arguments & File-Based Profiling
-        // =====================================================================
+        // STAGE 5: Run the Build with Test Arguments & File-Based Profiling
         stage('Run Build & Capture Profiler Data') {
             steps {
                 script {
@@ -399,12 +333,6 @@ public static class JenkinsBuildScript
                     echo " Duration:          ${params.PROFILER_DURATION_SECONDS}s"
                     echo "============================================"
         
-                    // --------------------------------------------------------
-                    // Build the argument string.
-                    //
-                    // Using a Groovy list joined with spaces keeps things
-                    // readable and maintainable. Each argument is one entry.
-                    // --------------------------------------------------------
                     def gameArgs = [
                         '-mode fpsTest',
                         '-pos 1,1,1',
@@ -418,26 +346,6 @@ public static class JenkinsBuildScript
                     if (env.NEEDS_DEELEVATION == 'true') {
                         echo "Launching with de-elevation (runas /trustlevel:0x20000)"
         
-                        // --------------------------------------------------------
-                        // Write a wrapper .bat file containing the full command.
-                        //
-                        // WHY:
-                        //   runas /trustlevel:0x20000 takes a single quoted
-                        //   string as its command argument. Nesting Groovy
-                        //   interpolation, Jenkins bat block escaping, cmd.exe
-                        //   parsing, and runas quote parsing creates four
-                        //   layers of interpretation that are nearly impossible
-                        //   to get right reliably.
-                        //
-                        //   Writing to a .bat file sidesteps all of this:
-                        //   - Groovy writes the exact command to a file
-                        //   - runas launches the file (a simple path, no quoting)
-                        //   - The .bat file contains the correctly formed command
-                        //
-                        // CLEANUP:
-                        //   The wrapper file is inside WORKSPACE and will be
-                        //   cleaned up by cleanWs() or the next build.
-                        // --------------------------------------------------------
                         writeFile file: "${WORKSPACE}\\run_game.bat", text: """\
         @echo off
         echo Launching game executable (de-elevated)...
@@ -450,13 +358,6 @@ public static class JenkinsBuildScript
                     } else {
                         echo "Launching directly (already non-elevated)"
         
-                        // --------------------------------------------------------
-                        // No de-elevation needed. Launch directly.
-                        //
-                        // "start /B" launches the process in the background
-                        // without opening a new console window, allowing
-                        // Jenkins to proceed to the sleep/timer step.
-                        // --------------------------------------------------------
                         writeFile file: "${WORKSPACE}\\run_game.bat", text: """\
         @echo off
         echo Launching game executable...
@@ -473,15 +374,12 @@ public static class JenkinsBuildScript
                     echo "Capture period complete. Stopping the player..."
                     bat 'taskkill /F /IM "GameBuild.exe" 2>nul || exit /b 0'
         
-                    // Allow file handles to release
                     sleep(time: 5, unit: 'SECONDS')
                 }
             }
         }
 
-        // =====================================================================
-        // STAGE 7: Validate & Collect Results
-        // =====================================================================
+        // STAGE 6: Validate & Collect Results
         stage('Collect Results') {
             steps {
                 script {
@@ -489,7 +387,6 @@ public static class JenkinsBuildScript
                     echo " Collecting Results & Profiler Data"
                     echo "============================================"
 
-                    // Display the application run log
                     if (fileExists(env.RUN_LOG)) {
                         echo "====== APPLICATION RUN LOG (last 50 lines) ======"
                         bat "powershell -Command \"Get-Content '${env.RUN_LOG}' -Tail 50\""
@@ -497,19 +394,8 @@ public static class JenkinsBuildScript
                         echo "WARNING: Application run log not found at ${env.RUN_LOG}"
                     }
 
-                    // --------------------------------------------------------
-                    // Verify the .raw profiler file was created and has data.
-                    //
-                    // The .raw file is a binary profiler capture that can be
-                    // loaded into Unity's Profiler window on any machine:
-                    //   Window → Analysis → Profiler → Load → select .raw file
-                    //
-                    // This allows developers to inspect frame times, memory,
-                    // rendering stats, and deep profiling call stacks from
-                    // the CI run without needing to reproduce it locally.
-                    // --------------------------------------------------------
+
                     if (fileExists(env.PROFILER_RAW_FILE)) {
-                        // Get the file size to confirm it contains data
                         def fileSizeOutput = bat(
                             script: "powershell -Command \"(Get-Item '${env.PROFILER_RAW_FILE}').Length\"",
                             returnStdout: true
@@ -530,7 +416,6 @@ public static class JenkinsBuildScript
                         echo "The player may have crashed before writing profiler data."
                     }
 
-                    // List all profiler output files
                     echo "====== PROFILER DATA DIRECTORY ======"
                     bat """
                         dir "${env.PROFILER_DATA_DIR}" 2>nul || exit /b 0
@@ -540,52 +425,35 @@ public static class JenkinsBuildScript
         }
     }
 
-    // =========================================================================
     // POST-BUILD ACTIONS
-    // =========================================================================
     post {
         always {
             script {
                 echo "============================================"
                 echo " Archiving Artifacts & Cleaning Up"
                 echo "============================================"
-
-                // --------------------------------------------------------
-                // Kill any remaining processes from this pipeline.
-                //
-                // Every taskkill uses "2>nul || exit /b 0" to ensure:
-                //   - No error output if the process isn't running
-                //   - Exit code 0 regardless of outcome
-                //
-                // This prevents post-build cleanup from failing the
-                // entire pipeline just because a process already exited.
-                // --------------------------------------------------------
+                
                 bat '''
                     taskkill /F /IM "GameBuild.exe" 2>nul || exit /b 0
                 '''
 
-                // Also kill any Unity processes that might be lingering
-                // from the (currently disabled) profiler stage
                 bat '''
                     taskkill /F /IM "Unity.exe" 2>nul || exit /b 0
                 '''
             }
 
-            // Archive build logs
             archiveArtifacts(
                 artifacts: 'Logs/**/*.log',
                 allowEmptyArchive: true,
                 fingerprint: true
             )
 
-            // Archive profiler .raw data files
             archiveArtifacts(
                 artifacts: 'ProfilerData/**/*',
                 allowEmptyArchive: true,
                 fingerprint: true
             )
 
-            // Archive the built executable and data folders
             archiveArtifacts(
                 artifacts: 'Build/**/*',
                 allowEmptyArchive: true,
