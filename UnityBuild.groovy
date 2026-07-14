@@ -60,10 +60,10 @@ pipeline {
                     echo " Validating Unity Installation & Environment"
                     echo "============================================"
 
-                    def sessionCheck = bat(
-                        script: 'net session >nul 2>&1 && echo ADMIN || echo USER',
-                        returnStdout: true
-                    ).trim().split('\n').last().trim()
+                    // def sessionCheck = bat(
+                    //     script: 'net session >nul 2>&1 && echo ADMIN || echo USER',
+                    //     returnStdout: true
+                    // ).trim().split('\n').last().trim()
 
                     // if (sessionCheck == 'ADMIN') {
                     //     env.NEEDS_DEELEVATION = 'true'
