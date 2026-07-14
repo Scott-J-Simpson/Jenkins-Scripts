@@ -293,6 +293,7 @@ public static class JenkinsBuildScript
                             "${env.UNITY_EDITOR}" ^
                                 -quit ^
                                 -batchmode ^
+                                -nographics ^
                                 -projectPath "${env.PROJECT_PATH}" ^
                                 -executeMethod JenkinsBuildScript.PerformBuild ^
                                 -buildTarget Win64 ^
