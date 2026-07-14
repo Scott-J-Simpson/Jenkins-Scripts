@@ -65,11 +65,13 @@ pipeline {
                         returnStdout: true
                     ).trim().split('\n').last().trim()
 
-                    if (sessionCheck == 'ADMIN') {
-                        env.NEEDS_DEELEVATION = 'true'
-                    } else {
-                        env.NEEDS_DEELEVATION = 'false'
-                    }
+                    // if (sessionCheck == 'ADMIN') {
+                    //     env.NEEDS_DEELEVATION = 'true'
+                    // } else {
+                    //     env.NEEDS_DEELEVATION = 'false'
+                    // }
+
+                    env.NEEDS_DEELEVATION = 'false'
 
                     if (!fileExists(env.UNITY_EDITOR)) {
                         error(
