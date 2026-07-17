@@ -40,7 +40,7 @@ pipeline {
         BUILD_LOG = "${WORKSPACE}\\Logs\\unity_build.log"
         RUN_LOG = "${WORKSPACE}\\Logs\\unity_run.log"
         PROFILER_DATA_DIR = "${WORKSPACE}\\ProfilerData"
-        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output.raw"
+        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output${BUILD_TIMESTAMP}.raw"
     }
 
     options {
