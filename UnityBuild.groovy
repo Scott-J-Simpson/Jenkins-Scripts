@@ -40,7 +40,9 @@ pipeline {
         BUILD_LOG = "${WORKSPACE}\\Logs\\unity_build.log"
         RUN_LOG = "${WORKSPACE}\\Logs\\unity_run.log"
         PROFILER_DATA_DIR = "${WORKSPACE}\\ProfilerData"
-        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output${BUILD_TIMESTAMP}.raw"
+        // NOTE: The actual filename gets a datetime stamp appended in the
+        // 'Prepare Build' stage (env.PROFILER_RAW_FILE is overridden there).
+        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output.raw"
     }
 
     options {
@@ -151,6 +153,18 @@ pipeline {
                         if not exist "${WORKSPACE}\\Logs" mkdir "${WORKSPACE}\\Logs"
                         if not exist "${env.PROFILER_DATA_DIR}" mkdir "${env.PROFILER_DATA_DIR}"
                     """
+
+                    // Append a datetime stamp so each run produces a uniquely
+                    // named profiler capture (e.g. profiler_output_20260720_143512.raw)
+                    def profilerTimestamp = bat(
+                        script: '@echo off\r\npowershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"',
+                        returnStdout: true
+                    ).trim().split('\n').last().trim()
+
+                    env.PROFILER_RAW_FILE =
+                        "${env.PROFILER_DATA_DIR}\\profiler_output_${profilerTimestamp}.raw"
+
+                    echo "Profiler output will be written to: ${env.PROFILER_RAW_FILE}"
 
                     // Write the C# build script into the Unity project
                     writeFile file: "${env.PROJECT_PATH}\\Assets\\Editor\\JenkinsBuildScript.cs",
