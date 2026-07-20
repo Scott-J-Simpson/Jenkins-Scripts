@@ -40,9 +40,10 @@ pipeline {
         BUILD_LOG = "${WORKSPACE}\\Logs\\unity_build.log"
         RUN_LOG = "${WORKSPACE}\\Logs\\unity_run.log"
         PROFILER_DATA_DIR = "${WORKSPACE}\\ProfilerData"
-        // NOTE: The actual filename gets a datetime stamp appended in the
-        // 'Prepare Build' stage (env.PROFILER_RAW_FILE is overridden there).
-        PROFILER_RAW_FILE = "${WORKSPACE}\\ProfilerData\\profiler_output.raw"
+        // NOTE: PROFILER_RAW_FILE is intentionally NOT declared here. It is set
+        // dynamically (with a datetime stamp) in the 'Prepare Build' stage.
+        // Declaring it in this environment{} block would let the directive value
+        // take precedence and silently override the dynamic assignment.
     }
 
     options {
